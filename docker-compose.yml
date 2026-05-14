@@ -10,6 +10,12 @@ services:
       - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payment -d payment_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   db_test:
     image: postgres:16-alpine
@@ -19,22 +25,17 @@ services:
       POSTGRES_DB: payment_test
     ports:
       - '5433:5432'
+    restart: unless-stopped
 
   app:
     build: .
     ports:
       - '3000:3000'
-    environment:
-      DATABASE_URL: postgresql://payment:payment@db:5432/payment_db
-      JWT_SECRET: changeme-jwt
-      JWT_REFRESH_SECRET: changeme-refresh
-      CARD_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000001
-      PORT: 3000
+    env_file: .env
     depends_on:
-      - db
-    volumes:
-      - .:/app
-      - /app/node_modules
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pgdata:
