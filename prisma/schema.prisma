@@ -1,0 +1,109 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TransactionStatus {
+  INITIATED
+  PROCESSING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  RETRYING
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  cards         Card[]
+  cardTokens    CardToken[]
+  transactions  Transaction[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  revoked   Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("refresh_tokens")
+}
+
+model Card {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  lastFour        String   @map("last_four") @db.VarChar(4)
+  cardHash        String   @map("card_hash")
+  encryptedPan    String   @map("encrypted_pan")
+  encryptedExpiry String   @map("encrypted_expiry")
+  cardholderName  String   @map("cardholder_name")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  user       User        @relation(fields: [userId], references: [id])
+  cardTokens CardToken[]
+
+  @@map("cards")
+}
+
+model CardToken {
+  id        String   @id @default(uuid())
+  cardId    String   @map("card_id")
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  card         Card          @relation(fields: [cardId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  transactions Transaction[]
+
+  @@map("card_tokens")
+}
+
+model Transaction {
+  id             String            @id @default(uuid())
+  userId         String            @map("user_id")
+  cardTokenId    String            @map("card_token_id")
+  amount         Decimal           @db.Decimal(12, 2)
+  currency       String            @db.VarChar(3)
+  status         TransactionStatus @default(INITIATED)
+  idempotencyKey String            @unique @map("idempotency_key")
+  authCode       String?           @map("auth_code")
+  errorCode      String?           @map("error_code")
+  retryCount     Int               @default(0) @map("retry_count")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  user      User                      @relation(fields: [userId], references: [id])
+  cardToken CardToken                 @relation(fields: [cardTokenId], references: [id])
+  history   TransactionStateHistory[]
+
+  @@map("transactions")
+}
+
+model TransactionStateHistory {
+  id            String            @id @default(uuid())
+  transactionId String            @map("transaction_id")
+  fromStatus    TransactionStatus @map("from_status")
+  toStatus      TransactionStatus @map("to_status")
+  reason        String?
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+
+  @@map("transaction_state_history")
+}
