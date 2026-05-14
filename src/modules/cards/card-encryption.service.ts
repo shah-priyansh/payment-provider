@@ -8,6 +8,9 @@ export class CardEncryptionService {
 
   constructor(encryptionKey: string) {
     this.key = Buffer.from(encryptionKey, 'hex');
+    if (this.key.length !== 32) {
+      throw new Error('CARD_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)');
+    }
   }
 
   encrypt(plaintext: string): string {

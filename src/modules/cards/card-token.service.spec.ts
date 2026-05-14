@@ -31,6 +31,18 @@ describe('CardTokenService', () => {
     expect(result.token).toBe('abc123');
   });
 
+  it('throws UnauthorizedException when token does not exist', async () => {
+    mockPrisma.cardToken.findUnique.mockResolvedValue(null);
+    await expect(service.validateToken('nonexistent', 'user-1')).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('throws UnauthorizedException when token is inactive', async () => {
+    mockPrisma.cardToken.findUnique.mockResolvedValue({
+      token: 'tok', userId: 'user-1', isActive: false, expiresAt: new Date(Date.now() + 1000),
+    });
+    await expect(service.validateToken('tok', 'user-1')).rejects.toThrow(UnauthorizedException);
+  });
+
   it('throws UnauthorizedException for expired token', async () => {
     mockPrisma.cardToken.findUnique.mockResolvedValue({
       token: 'tok', userId: 'user-1', isActive: true, expiresAt: new Date(Date.now() - 1000),
