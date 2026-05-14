@@ -4,6 +4,7 @@ import { PrismaService } from '../../src/prisma/prisma.service';
 import { MockBankService } from '../../src/modules/mock-bank/mock-bank.service';
 import { createTestApp, truncateTables } from './helpers/test-app';
 import { TransactionStatus } from '@prisma/client';
+import { RetryService } from '../../src/modules/transactions/retry.service';
 
 async function setupUserWithToken(app: INestApplication) {
   await request(app.getHttpServer()).post('/auth/register').send({ email: 'user@example.com', password: 'password123' });
@@ -74,7 +75,6 @@ describe('Payments (integration)', () => {
 
   it('POST /payments with retryable failures exhausted → FAILED after 3 retries', async () => {
     jest.spyOn(bank, 'authorize').mockResolvedValue({ success: false, errorCode: 'NETWORK_TIMEOUT' });
-    const { RetryService } = await import('../../src/modules/transactions/retry.service');
     const retryService = app.get(RetryService);
     jest.spyOn(retryService, 'calculateDelay').mockReturnValue(10);
     const { accessToken, cardToken } = await setupUserWithToken(app);
