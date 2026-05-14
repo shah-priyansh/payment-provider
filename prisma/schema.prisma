@@ -38,6 +38,7 @@ model RefreshToken {
 
   user User @relation(fields: [userId], references: [id])
 
+  @@index([userId])
   @@map("refresh_tokens")
 }
 
@@ -45,7 +46,7 @@ model Card {
   id              String   @id @default(uuid())
   userId          String   @map("user_id")
   lastFour        String   @map("last_four") @db.VarChar(4)
-  cardHash        String   @map("card_hash")
+  cardHash        String   @unique @map("card_hash")
   encryptedPan    String   @map("encrypted_pan")
   encryptedExpiry String   @map("encrypted_expiry")
   cardholderName  String   @map("cardholder_name")
@@ -55,6 +56,7 @@ model Card {
   user       User        @relation(fields: [userId], references: [id])
   cardTokens CardToken[]
 
+  @@index([userId])
   @@map("cards")
 }
 
@@ -71,6 +73,8 @@ model CardToken {
   user         User          @relation(fields: [userId], references: [id])
   transactions Transaction[]
 
+  @@index([cardId])
+  @@index([userId])
   @@map("card_tokens")
 }
 
@@ -92,6 +96,9 @@ model Transaction {
   cardToken CardToken                 @relation(fields: [cardTokenId], references: [id])
   history   TransactionStateHistory[]
 
+  @@index([userId])
+  @@index([cardTokenId])
+  @@index([status])
   @@map("transactions")
 }
 
@@ -105,5 +112,6 @@ model TransactionStateHistory {
 
   transaction Transaction @relation(fields: [transactionId], references: [id])
 
+  @@index([transactionId])
   @@map("transaction_state_history")
 }

@@ -1,3 +1,8 @@
+Loaded Prisma config from prisma.config.ts.
+
+-- CreateSchema
+CREATE SCHEMA IF NOT EXISTS "public";
+
 -- CreateEnum
 CREATE TYPE "TransactionStatus" AS ENUM ('INITIATED', 'PROCESSING', 'AUTHORIZED', 'CAPTURED', 'FAILED', 'RETRYING');
 
@@ -84,10 +89,37 @@ CREATE TABLE "transaction_state_history" (
 CREATE UNIQUE INDEX "users_email_key" ON "users"("email");
 
 -- CreateIndex
+CREATE INDEX "refresh_tokens_user_id_idx" ON "refresh_tokens"("user_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "cards_card_hash_key" ON "cards"("card_hash");
+
+-- CreateIndex
+CREATE INDEX "cards_user_id_idx" ON "cards"("user_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "card_tokens_token_key" ON "card_tokens"("token");
 
 -- CreateIndex
+CREATE INDEX "card_tokens_card_id_idx" ON "card_tokens"("card_id");
+
+-- CreateIndex
+CREATE INDEX "card_tokens_user_id_idx" ON "card_tokens"("user_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "transactions_idempotency_key_key" ON "transactions"("idempotency_key");
+
+-- CreateIndex
+CREATE INDEX "transactions_user_id_idx" ON "transactions"("user_id");
+
+-- CreateIndex
+CREATE INDEX "transactions_card_token_id_idx" ON "transactions"("card_token_id");
+
+-- CreateIndex
+CREATE INDEX "transactions_status_idx" ON "transactions"("status");
+
+-- CreateIndex
+CREATE INDEX "transaction_state_history_transaction_id_idx" ON "transaction_state_history"("transaction_id");
 
 -- AddForeignKey
 ALTER TABLE "refresh_tokens" ADD CONSTRAINT "refresh_tokens_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -109,3 +141,4 @@ ALTER TABLE "transactions" ADD CONSTRAINT "transactions_card_token_id_fkey" FORE
 
 -- AddForeignKey
 ALTER TABLE "transaction_state_history" ADD CONSTRAINT "transaction_state_history_transaction_id_fkey" FOREIGN KEY ("transaction_id") REFERENCES "transactions"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
