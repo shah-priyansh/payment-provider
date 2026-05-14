@@ -23,6 +23,16 @@ async function setupUserWithToken(app: INestApplication) {
   return { accessToken, cardToken: tokenRes.body.token as string };
 }
 
+async function pollStatus(prisma: PrismaService, id: string, expected: TransactionStatus, timeoutMs = 2000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const tx = await prisma.transaction.findUnique({ where: { id } });
+    if (tx?.status === expected) return tx;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return prisma.transaction.findUnique({ where: { id } });
+}
+
 describe('Payments (integration)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -33,7 +43,10 @@ describe('Payments (integration)', () => {
     prisma = app.get(PrismaService);
     bank = app.get(MockBankService);
   });
-  afterEach(async () => truncateTables(prisma));
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    await truncateTables(prisma);
+  });
   afterAll(async () => app.close());
 
   it('POST /payments happy path → 201, transaction eventually CAPTURED', async () => {
@@ -45,8 +58,7 @@ describe('Payments (integration)', () => {
       .set('idempotency-key', crypto.randomUUID())
       .send({ cardToken, amount: 99.99, currency: 'USD' });
     expect(res.status).toBe(201);
-    await new Promise((r) => setTimeout(r, 200));
-    const tx = await prisma.transaction.findUnique({ where: { id: res.body.id } });
+    const tx = await pollStatus(prisma, res.body.id, TransactionStatus.CAPTURED);
     expect(tx!.status).toBe(TransactionStatus.CAPTURED);
   });
 
@@ -67,8 +79,7 @@ describe('Payments (integration)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .set('idempotency-key', crypto.randomUUID())
       .send({ cardToken, amount: 99.99, currency: 'USD' });
-    await new Promise((r) => setTimeout(r, 200));
-    const tx = await prisma.transaction.findUnique({ where: { id: res.body.id } });
+    const tx = await pollStatus(prisma, res.body.id, TransactionStatus.FAILED);
     expect(tx!.status).toBe(TransactionStatus.FAILED);
     expect(tx!.retryCount).toBe(0);
   });
@@ -83,8 +94,7 @@ describe('Payments (integration)', () => {
       .set('Authorization', `Bearer ${accessToken}`)
       .set('idempotency-key', crypto.randomUUID())
       .send({ cardToken, amount: 99.99, currency: 'USD' });
-    await new Promise((r) => setTimeout(r, 500));
-    const tx = await prisma.transaction.findUnique({ where: { id: res.body.id } });
+    const tx = await pollStatus(prisma, res.body.id, TransactionStatus.FAILED, 3000);
     expect(tx!.status).toBe(TransactionStatus.FAILED);
     expect(tx!.retryCount).toBe(3);
   });
@@ -93,6 +103,8 @@ describe('Payments (integration)', () => {
     jest.spyOn(bank, 'authorize').mockResolvedValue({ success: true, authCode: 'AUTH_TEST' });
     const { accessToken, cardToken } = await setupUserWithToken(app);
     const payRes = await request(app.getHttpServer()).post('/payments').set('Authorization', `Bearer ${accessToken}`).set('idempotency-key', crypto.randomUUID()).send({ cardToken, amount: 10, currency: 'USD' });
+    // Wait for async processing to complete before teardown
+    await pollStatus(prisma, payRes.body.id, TransactionStatus.CAPTURED);
 
     await request(app.getHttpServer()).post('/auth/register').send({ email: 'other@example.com', password: 'password123' });
     const other = await request(app.getHttpServer()).post('/auth/login').send({ email: 'other@example.com', password: 'password123' });

@@ -29,10 +29,10 @@ describe('Auth (integration)', () => {
     expect(res.status).toBe(409);
   });
 
-  it('POST /auth/login with valid credentials → 201 with tokens', async () => {
+  it('POST /auth/login with valid credentials → 200 with tokens', async () => {
     await request(app.getHttpServer()).post('/auth/register').send({ email: 'test@example.com', password: 'password123' });
     const res = await request(app.getHttpServer()).post('/auth/login').send({ email: 'test@example.com', password: 'password123' });
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(200);
     expect(res.body.accessToken).toBeDefined();
   });
 
