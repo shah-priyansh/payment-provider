@@ -10,6 +10,7 @@ import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { CardsModule } from './modules/cards/cards.module';
+import { MockBankModule } from './modules/mock-bank/mock-bank.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { CardsModule } from './modules/cards/cards.module';
     AuthModule,
     UsersModule,
     CardsModule,
+    MockBankModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
