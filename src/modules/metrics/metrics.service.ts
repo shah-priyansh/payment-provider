@@ -7,9 +7,10 @@ export class MetricsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getMetrics() {
-    const [total, captured, last24h] = await Promise.all([
+    const [total, captured, failed, last24h] = await Promise.all([
       this.prisma.transaction.count(),
       this.prisma.transaction.count({ where: { status: TransactionStatus.CAPTURED } }),
+      this.prisma.transaction.count({ where: { status: TransactionStatus.FAILED } }),
       this.prisma.transaction.count({
         where: { createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
       }),
@@ -25,7 +26,7 @@ export class MetricsService {
     return {
       totalTransactions: total,
       last24hTransactions: last24h,
-      successRate: total > 0 ? Number((captured / total).toFixed(4)) : 0,
+      successRate: (captured + failed) > 0 ? Number((captured / (captured + failed)).toFixed(4)) : 0,
       averageResponseTimeMs: Math.round(avgResult[0]?.avg_ms ?? 0),
     };
   }
