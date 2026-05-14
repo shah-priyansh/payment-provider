@@ -1,8 +1,8 @@
-import { ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { CardTokenService } from '../cards/card-token.service';
-import { TransactionStatus } from '@prisma/client';
+import { Transaction, TransactionStatus } from '@prisma/client';
 import { getCorrelationContext } from '../../common/context/correlation.context';
 
 @Injectable()
@@ -22,6 +22,10 @@ export class PaymentsService {
     currency: string,
     idempotencyKey: string,
   ) {
+    if (!idempotencyKey) {
+      throw new BadRequestException('idempotency-key header is required');
+    }
+
     const { correlationId } = getCorrelationContext();
 
     const existing = await this.prisma.transaction.findUnique({ where: { idempotencyKey } });
@@ -35,16 +39,26 @@ export class PaymentsService {
 
     const validToken = await this.cardTokens.validateToken(cardToken, userId);
 
-    const tx = await this.prisma.transaction.create({
-      data: {
-        userId,
-        cardTokenId: validToken.id,
-        amount,
-        currency: currency.toUpperCase(),
-        status: TransactionStatus.INITIATED,
-        idempotencyKey,
-      },
-    });
+    let tx: Transaction;
+    try {
+      tx = await this.prisma.transaction.create({
+        data: {
+          userId,
+          cardTokenId: validToken.id,
+          amount,
+          currency: currency.toUpperCase(),
+          status: TransactionStatus.INITIATED,
+          idempotencyKey,
+        },
+      });
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        // Race condition: another request created this transaction concurrently
+        const raced = await this.prisma.transaction.findUnique({ where: { idempotencyKey } });
+        if (raced) return raced;
+      }
+      throw err;
+    }
 
     this.logger.log(JSON.stringify({
       timestamp: new Date().toISOString(), level: 'info', service: 'payment-provider',

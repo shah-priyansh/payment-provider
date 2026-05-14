@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { TransactionStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StateMachineService } from './state-machine.service';
@@ -18,17 +18,19 @@ export class TransactionsService {
   ) {}
 
   async processPayment(transactionId: string): Promise<void> {
-    const tx = await this.prisma.transaction.findUniqueOrThrow({ where: { id: transactionId } });
+    const tx = await this.prisma.transaction.findUnique({ where: { id: transactionId } });
+    if (!tx) throw new NotFoundException('Transaction not found');
     await this.stateMachine.transition(transactionId, tx.status, TransactionStatus.PROCESSING);
     await this.attemptPayment(transactionId);
   }
 
   private async attemptPayment(transactionId: string): Promise<void> {
     const { correlationId } = getCorrelationContext();
-    const tx = await this.prisma.transaction.findUniqueOrThrow({
+    const tx = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
       include: { cardToken: { include: { card: true } } },
     });
+    if (!tx) throw new NotFoundException('Transaction not found');
 
     const result = await this.bank.authorize(
       tx.cardToken.card.lastFour,
@@ -73,9 +75,11 @@ export class TransactionsService {
   }
 
   async getTransaction(id: string) {
-    return this.prisma.transaction.findUniqueOrThrow({
+    const tx = await this.prisma.transaction.findUnique({
       where: { id },
       include: { history: { orderBy: { createdAt: 'asc' } } },
     });
+    if (!tx) throw new NotFoundException('Transaction not found');
+    return tx;
   }
 }

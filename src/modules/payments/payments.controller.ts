@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiHeader, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { ThrottlerGuard } from '@nestjs/throttler';
@@ -27,7 +27,7 @@ export class PaymentsController {
   }
 
   @Get(':id')
-  getPayment(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+  getPayment(@CurrentUser() user: { id: string }, @Param('id', ParseUUIDPipe) id: string) {
     return this.payments.getPayment(id, user.id);
   }
 }
