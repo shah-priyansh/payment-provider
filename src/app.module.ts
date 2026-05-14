@@ -12,6 +12,7 @@ import { UsersModule } from './modules/users/users.module';
 import { CardsModule } from './modules/cards/cards.module';
 import { MockBankModule } from './modules/mock-bank/mock-bank.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { MetricsModule } from './modules/metrics/metrics.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
     CardsModule,
     MockBankModule,
     PaymentsModule,
+    MetricsModule,
   ],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: LoggingInterceptor },
