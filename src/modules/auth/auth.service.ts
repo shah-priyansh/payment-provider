@@ -52,7 +52,7 @@ export class AuthService {
       secret: this.config.get<string>('jwt.refreshSecret') as string,
       expiresIn: this.config.get('jwt.refreshExpiresIn') as StringValue,
     });
-    const tokenHash = await bcrypt.hash(refreshToken, 10);
+    const tokenHash = await bcrypt.hash(refreshToken, 12);
     await this.prisma.refreshToken.create({
       data: {
         userId,
