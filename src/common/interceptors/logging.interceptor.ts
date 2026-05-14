@@ -11,20 +11,37 @@ export class LoggingInterceptor implements NestInterceptor {
     const start = Date.now();
 
     return next.handle().pipe(
-      tap(() => {
-        const { correlationId, userId } = getCorrelationContext();
-        this.logger.log(
-          JSON.stringify({
-            timestamp: new Date().toISOString(),
-            level: 'info',
-            service: 'payment-provider',
-            correlationId,
-            userId: userId ?? null,
-            eventType: `${req.method} ${req.path}`,
-            duration: Date.now() - start,
-            errorDetails: null,
-          }),
-        );
+      tap({
+        next: () => {
+          const { correlationId, userId } = getCorrelationContext();
+          this.logger.log(
+            JSON.stringify({
+              timestamp: new Date().toISOString(),
+              level: 'info',
+              service: 'payment-provider',
+              correlationId,
+              userId: userId ?? null,
+              eventType: `${req.method} ${req.path}`,
+              duration: Date.now() - start,
+              errorDetails: null,
+            }),
+          );
+        },
+        error: (err: unknown) => {
+          const { correlationId, userId } = getCorrelationContext();
+          this.logger.error(
+            JSON.stringify({
+              timestamp: new Date().toISOString(),
+              level: 'error',
+              service: 'payment-provider',
+              correlationId,
+              userId: userId ?? null,
+              eventType: `${req.method} ${req.path}`,
+              duration: Date.now() - start,
+              errorDetails: err instanceof Error ? err.message : String(err),
+            }),
+          );
+        },
       }),
     );
   }
