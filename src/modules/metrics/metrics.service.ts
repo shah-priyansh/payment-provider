@@ -16,7 +16,6 @@ export class MetricsService {
       }),
     ]);
 
-    // Prisma doesn't support date diff natively; use raw SQL for avg response time
     const avgResult = await this.prisma.$queryRaw<[{ avg_ms: number | null }]>`
       SELECT EXTRACT(EPOCH FROM AVG(updated_at - created_at)) * 1000 AS avg_ms
       FROM transactions
