@@ -1,98 +1,113 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Payment Provider
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A backend service for processing card payments. Handles user accounts, card vault, tokenization, and payment lifecycle with a mock bank integration.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Stack
 
-## Description
+- **NestJS** + TypeScript
+- **PostgreSQL** via Prisma ORM
+- **JWT** (access + refresh tokens)
+- **Docker Compose** for local dev
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Getting Started
 
 ```bash
-$ npm install
+# 1. Install dependencies
+npm install
+
+# 2. Copy env file and fill in values
+cp .env.example .env
+
+# Generate CARD_ENCRYPTION_KEY
+openssl rand -hex 32
+
+# 3. Start the database
+docker compose up db -d
+
+# 4. Run migrations
+npm run db:migrate
+
+# 5. Start the server
+npm run start:dev
 ```
 
-## Compile and run the project
+Swagger UI available at `http://localhost:3000/api`.
+
+## Running with Docker
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+docker compose up --build
 ```
 
-## Run tests
+This starts the app on port 3000 and a PostgreSQL instance on port 5432.
+
+## Environment Variables
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `DATABASE_TEST_URL` | Test database (port 5433) |
+| `JWT_SECRET` | Access token signing key |
+| `JWT_REFRESH_SECRET` | Refresh token signing key |
+| `CARD_ENCRYPTION_KEY` | 64-char hex key for AES-256-GCM card encryption |
+| `PORT` | Server port (default 3000) |
+
+## API Endpoints
+
+### Auth
+| Method | Path | Description |
+|---|---|---|
+| POST | `/auth/register` | Create account, returns tokens |
+| POST | `/auth/login` | Login, returns tokens |
+| POST | `/auth/refresh` | Rotate refresh token |
+| POST | `/auth/logout` | Revoke refresh token |
+
+### Cards
+| Method | Path | Description |
+|---|---|---|
+| POST | `/cards` | Add a card (Luhn validated, PAN encrypted) |
+| GET | `/cards` | List your cards |
+| DELETE | `/cards/:id` | Remove a card |
+| POST | `/cards/:id/tokenize` | Get a single-use payment token |
+
+### Payments
+| Method | Path | Description |
+|---|---|---|
+| POST | `/payments` | Submit payment (requires `idempotency-key` header) |
+| GET | `/payments/:id` | Get transaction status and history |
+
+### Metrics
+| Method | Path | Description |
+|---|---|---|
+| GET | `/metrics` | Transaction counts, success rate, avg response time |
+
+## Tests
 
 ```bash
-# unit tests
-$ npm run test
+# Unit tests
+npm run test
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+# Integration tests (requires db_test container running)
+docker compose up db_test -d
+npm run test:integration
 ```
 
-## Deployment
+Unit tests cover: Luhn validation, card encryption, token service, mock bank, state machine, retry logic.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Integration tests cover: auth flows, card management, payment lifecycle, idempotency, retry exhaustion, access control.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Key Design Decisions
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+**Card storage** — PAN is encrypted with AES-256-GCM (unique IV per card). CVV is never stored. Last four digits and a SHA-256 hash of the PAN are stored in plaintext for display and duplicate detection.
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+**Tokenization** — Tokens are 32 random bytes encoded as hex (64 chars). Each token expires after 1 hour and is single-use-friendly (can be invalidated).
 
-## Resources
+**Payments** — Payment processing is asynchronous. `POST /payments` returns immediately with the transaction in `INITIATED` state. The bank call happens in the background. Poll `GET /payments/:id` for the final status.
 
-Check out a few resources that may come in handy when working with NestJS:
+**Idempotency** — `POST /payments` requires an `idempotency-key` header. Duplicate keys return the original transaction instead of creating a new one.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+**Retry** — Network errors and rate limits trigger exponential backoff with jitter: `min(1000 * 2^attempt, 30000) + random(0, 500)ms`. Max 3 retries. Insufficient funds and invalid card errors fail immediately (no retry).
 
-## Support
+**Rate limiting** — Global: 100 requests/min. Payments endpoint: 20 requests/min.
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+**Observability** — Every request gets a `X-Correlation-ID` header (generated if not provided). All logs are structured JSON with correlation ID, user ID, duration, and endpoint.
