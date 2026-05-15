@@ -26,12 +26,14 @@ export class TransactionsService {
 
   private async attemptPayment(transactionId: string): Promise<void> {
     const { correlationId } = getCorrelationContext();
+
     const tx = await this.prisma.transaction.findUnique({
       where: { id: transactionId },
       include: { cardToken: { include: { card: true } } },
     });
     if (!tx) throw new NotFoundException('Transaction not found');
 
+    // TODO: pass full PAN once we have a proper decrypt-on-demand flow, for now lastFour is enough for the mock
     const result = await this.bank.authorize(
       tx.cardToken.card.lastFour,
       tx.amount.toString(),
@@ -39,36 +41,66 @@ export class TransactionsService {
     );
 
     if (result.success) {
-      await this.prisma.transaction.update({ where: { id: transactionId }, data: { authCode: result.authCode } });
+      await this.prisma.transaction.update({
+        where: { id: transactionId },
+        data: { authCode: result.authCode },
+      });
       await this.stateMachine.transition(transactionId, TransactionStatus.PROCESSING, TransactionStatus.AUTHORIZED, result.authCode);
       await this.stateMachine.transition(transactionId, TransactionStatus.AUTHORIZED, TransactionStatus.CAPTURED);
+
       this.logger.log(JSON.stringify({
-        timestamp: new Date().toISOString(), level: 'info', service: 'payment-provider',
-        correlationId, transactionId, userId: tx.userId, eventType: 'PAYMENT_CAPTURED',
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        service: 'payment-provider',
+        correlationId,
+        transactionId,
+        userId: tx.userId,
+        eventType: 'PAYMENT_CAPTURED',
       }));
       return;
     }
 
-    await this.prisma.transaction.update({ where: { id: transactionId }, data: { errorCode: result.errorCode } });
+    await this.prisma.transaction.update({
+      where: { id: transactionId },
+      data: { errorCode: result.errorCode },
+    });
     await this.stateMachine.transition(transactionId, TransactionStatus.PROCESSING, TransactionStatus.FAILED, result.errorCode);
 
-    if (result.errorCode && this.retry.isRetryable(result.errorCode) && this.retry.canRetry(tx.retryCount)) {
+    const shouldRetry = result.errorCode
+      && this.retry.isRetryable(result.errorCode)
+      && this.retry.canRetry(tx.retryCount);
+
+    if (shouldRetry) {
       await this.stateMachine.transition(transactionId, TransactionStatus.FAILED, TransactionStatus.RETRYING);
+
       const delay = this.retry.calculateDelay(tx.retryCount);
       this.logger.warn(JSON.stringify({
-        timestamp: new Date().toISOString(), level: 'warn', service: 'payment-provider',
-        correlationId, transactionId, eventType: 'PAYMENT_RETRY_SCHEDULED',
-        attempt: tx.retryCount + 1, delay,
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        service: 'payment-provider',
+        correlationId,
+        transactionId,
+        eventType: 'PAYMENT_RETRY_SCHEDULED',
+        attempt: tx.retryCount + 1,
+        delay,
       }));
 
-      await new Promise((r) => setTimeout(r, delay));
-      await this.prisma.transaction.update({ where: { id: transactionId }, data: { retryCount: { increment: 1 } } });
+      await new Promise(r => setTimeout(r, delay));
+      await this.prisma.transaction.update({
+        where: { id: transactionId },
+        data: { retryCount: { increment: 1 } },
+      });
       await this.stateMachine.transition(transactionId, TransactionStatus.RETRYING, TransactionStatus.PROCESSING);
       await this.attemptPayment(transactionId);
     } else {
       this.logger.error(JSON.stringify({
-        timestamp: new Date().toISOString(), level: 'error', service: 'payment-provider',
-        correlationId, transactionId, userId: tx.userId, eventType: 'PAYMENT_FAILED_TERMINAL',
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'payment-provider',
+        correlationId,
+        transactionId,
+        userId: tx.userId,
+        eventType: 'PAYMENT_FAILED_TERMINAL',
         errorCode: result.errorCode,
       }));
     }

@@ -1,10 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
+// retryable errors are transient network/infra issues — business errors like insufficient funds should NOT be retried
 const RETRYABLE_ERRORS = new Set(['NETWORK_TIMEOUT', 'RATE_LIMIT_EXCEEDED']);
-const MAX_ATTEMPTS = 3;
-const BASE_DELAY = 1000;
-const MAX_DELAY = 30000;
-const JITTER = 500;
 
 @Injectable()
 export class RetryService {
@@ -13,11 +10,12 @@ export class RetryService {
   }
 
   calculateDelay(attempt: number): number {
-    const exponential = Math.min(BASE_DELAY * Math.pow(2, attempt), MAX_DELAY);
-    return exponential + Math.random() * JITTER;
+    // exponential backoff capped at 30s + small random jitter to avoid thundering herd
+    const base = Math.min(1000 * Math.pow(2, attempt), 30000);
+    return base + Math.random() * 500;
   }
 
   canRetry(retryCount: number): boolean {
-    return retryCount < MAX_ATTEMPTS;
+    return retryCount < 3;
   }
 }

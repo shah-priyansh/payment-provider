@@ -28,11 +28,17 @@ export class PaymentsService {
 
     const { correlationId } = getCorrelationContext();
 
+    // check before creating — if key already exists return the original transaction
     const existing = await this.prisma.transaction.findUnique({ where: { idempotencyKey } });
     if (existing) {
       this.logger.log(JSON.stringify({
-        timestamp: new Date().toISOString(), level: 'info', service: 'payment-provider',
-        correlationId, userId, transactionId: existing.id, eventType: 'IDEMPOTENCY_HIT',
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        service: 'payment-provider',
+        correlationId,
+        userId,
+        transactionId: existing.id,
+        eventType: 'IDEMPOTENCY_HIT',
       }));
       return existing;
     }
@@ -52,8 +58,8 @@ export class PaymentsService {
         },
       });
     } catch (err: any) {
+      // P2002 = unique constraint — two requests raced on the same idempotency key
       if (err?.code === 'P2002') {
-        // Race condition: another request created this transaction concurrently
         const raced = await this.prisma.transaction.findUnique({ where: { idempotencyKey } });
         if (raced) return raced;
       }
@@ -61,14 +67,26 @@ export class PaymentsService {
     }
 
     this.logger.log(JSON.stringify({
-      timestamp: new Date().toISOString(), level: 'info', service: 'payment-provider',
-      correlationId, userId, transactionId: tx.id, eventType: 'PAYMENT_INITIATED', amount, currency,
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      service: 'payment-provider',
+      correlationId,
+      userId,
+      transactionId: tx.id,
+      eventType: 'PAYMENT_INITIATED',
+      amount,
+      currency,
     }));
 
+    // fire and forget — return transaction ID immediately, bank call happens in background
     this.transactions.processPayment(tx.id).catch((err: Error) =>
       this.logger.error(JSON.stringify({
-        timestamp: new Date().toISOString(), level: 'error', service: 'payment-provider',
-        correlationId, transactionId: tx.id, eventType: 'PAYMENT_PROCESS_ERROR',
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'payment-provider',
+        correlationId,
+        transactionId: tx.id,
+        eventType: 'PAYMENT_PROCESS_ERROR',
         errorDetails: err.message,
       })),
     );
